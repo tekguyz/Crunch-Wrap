@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
   // 1. HARD BYPASS FOR DEVELOPMENT
-  const hasBypass = request.cookies.has('crunch_dev_bypass');
+  const hasBypass = request.cookies.has('crunch_dev_bypass') || request.cookies.has('crispy_dev_bypass');
   if (hasBypass && request.nextUrl.pathname.startsWith('/dashboard')) {
     return NextResponse.next(); // Let them right in
   }

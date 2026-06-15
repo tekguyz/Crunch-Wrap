@@ -93,8 +93,9 @@ export function useFileDrop() {
         // --- FOREGROUND PIPELINE ---
         (async () => {
           try {
+            const isDemo = document.cookie.includes('crunch_dev_bypass=true') || document.cookie.includes('crispy_dev_bypass=true');
             const { data: { user } } = await supabase.auth.getUser();
-            if (!user) throw new Error('No user session available');
+            if (!user && !isDemo) throw new Error('No user session available');
 
             const isDocument = typeof rawContent === 'string';
             let fileName = '';
@@ -106,53 +107,57 @@ export function useFileDrop() {
               fileName = `${Date.now()}-${id}.md`;
               contentType = 'text/markdown';
               mimeType = 'text/markdown';
-              filePath = `${user.id}/${fileName}`;
+              filePath = user ? `${user.id}/${fileName}` : `demo/${fileName}`;
             } else {
               const blob = rawContent as Blob;
               mimeType = blob.type || 'audio/webm';
               const ext = mimeType.includes('mpeg') || mimeType.includes('mp3') ? 'mp3' : 'webm';
               fileName = `${Date.now()}-${id}.${ext}`;
               contentType = mimeType;
-              filePath = `${user.id}/${fileName}`;
+              filePath = user ? `${user.id}/${fileName}` : `demo/${fileName}`;
 
-              // Get Signed Upload URL
-              const { data: signedData, error: signedError } = await supabase.storage
-                .from('meetings')
-                .createSignedUploadUrl(filePath);
-              
-              if (signedError) throw signedError;
+              if (user) {
+                // Get Signed Upload URL
+                const { data: signedData, error: signedError } = await supabase.storage
+                  .from('meetings')
+                  .createSignedUploadUrl(filePath);
+                
+                if (signedError) throw signedError;
 
-              // Upload using raw PUT request
-              const uploadBlob = rawContent as Blob;
-              if (uploadBlob.size < 1000) throw new Error("Blob is corrupted or empty before upload");
+                // Upload using raw PUT request
+                const uploadBlob = rawContent as Blob;
+                if (uploadBlob.size < 1000) throw new Error("Blob is corrupted or empty before upload");
 
-              const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_DATABASE_URL;
-              const finalUrl = new URL(signedData.signedUrl, supabaseUrl!).toString();
+                const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_DATABASE_URL;
+                const finalUrl = new URL(signedData.signedUrl, supabaseUrl!).toString();
 
-              const uploadResponse = await fetch(finalUrl, {
-                method: 'PUT',
-                body: uploadBlob,
-                headers: { 'Content-Type': contentType }
-              });
+                const uploadResponse = await fetch(finalUrl, {
+                  method: 'PUT',
+                  body: uploadBlob,
+                  headers: { 'Content-Type': contentType }
+                });
 
-              if (!uploadResponse.ok) throw new Error('Failed to upload file');
+                if (!uploadResponse.ok) throw new Error('Failed to upload file');
+              }
             }
 
-            // Insert into Supabase DB
-            const { data: dbInsight, error: dbError } = await supabase
-              .from('insights')
-              .upsert({
-                id: id,
-                user_id: user.id,
-                title: file.name,
-                processing_status: 'analyzing',
-                audio_url: isDocument ? null : filePath,
-                summary: 'Analyzing...',
-              }, { onConflict: 'id' })
-              .select()
-              .single();
+            if (user) {
+              // Insert into Supabase DB
+              const { data: dbInsight, error: dbError } = await supabase
+                .from('insights')
+                .upsert({
+                  id: id,
+                  user_id: user.id,
+                  title: file.name,
+                  processing_status: 'analyzing',
+                  audio_url: isDocument ? null : filePath,
+                  summary: 'Analyzing...',
+                }, { onConflict: 'id' })
+                .select()
+                .single();
 
-            if (dbError) throw dbError;
+              if (dbError) throw dbError;
+            }
 
             // Mark as analyzing locally
             const analyzingInsight = {
@@ -178,9 +183,10 @@ export function useFileDrop() {
 
             // Call API
             const apiBody: any = { 
-              insightId: dbInsight.id,
+              insightId: id,
               mimeType: mimeType,
-              isDeepAnalysisEnabled: false
+              isDeepAnalysisEnabled: false,
+              isDemoMode: isDemo
             };
             if (isDocument) {
               apiBody.textPayload = rawContent;

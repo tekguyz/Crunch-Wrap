@@ -63,6 +63,12 @@ export default function SettingsPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         setUserEmail(user.email ?? null);
+      } else {
+        const emailMatch = document.cookie.match(/(?:^|; )crunch_dev_email=([^;]*)/);
+        const hasBypass = document.cookie.match(/(?:^|; )crunch_dev_bypass=([^;]*)/) || document.cookie.match(/(?:^|; )crispy_dev_bypass=([^;]*)/);
+        if (hasBypass) {
+          setUserEmail(emailMatch ? decodeURIComponent(emailMatch[1]) : 'demo@tekguyz.com');
+        }
       }
     };
     fetchUser();
@@ -71,6 +77,9 @@ export default function SettingsPage() {
   const handleLogout = async () => {
     setIsLoggingOut(true);
     try {
+      document.cookie = "crunch_dev_bypass=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+      document.cookie = "crispy_dev_bypass=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
+      document.cookie = "crunch_dev_email=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC;";
       await supabase.auth.signOut();
       router.push('/auth');
     } catch (error) {

@@ -13,6 +13,51 @@ export async function POST(req: Request) {
     insightId = data.insightId;
     const { audioUrl, textPayload, mimeType, isDeepAnalysisEnabled } = data;
 
+    // Detect Sandbox Bypass / Demo Mode cookie or field
+    const cookieHeader = req.headers.get("cookie") || "";
+    const isDemoMode = cookieHeader.includes("crunch_dev_bypass=true") || 
+                       cookieHeader.includes("crispy_dev_bypass=true") ||
+                       data.isDemoMode;
+
+    if (isDemoMode) {
+      console.log('API /api/analyze called under Demo Mode. Running offline mock synthesis.');
+      // Simulate synthesis delay for UX realism
+      await new Promise(resolve => setTimeout(resolve, 1200));
+
+      const title = data.title || (textPayload ? "Document Summary Notice" : "Audio Synthesis Report");
+      const mockIntelligence = {
+        title: title,
+        summary: "This is a beautifully synthesized summary generated under Demo Mode. In this sandboxed environment, we generate custom, highly relevant diagnostic mock reports to help you review all interface sections, responsive charts, and user experience components with absolute security and no active API billing costs.",
+        highlights: [
+          "Demo Mode active: verified high-fidelity interface performance with zero-API operations.",
+          "Local storage framework (IndexedDB) is housing this analysis document on your device.",
+          "Ask Document Assistant chat is online to respond with offline interactive heuristics."
+        ],
+        action_items: [
+          "Open the 'Ask Assistant' side drawer to practice interactive query-response controls.",
+          "Verify player interactions if you imported or recorded voice notes in this session."
+        ],
+        topics: ["Demo Mode", "Performance Analytics", "UI/UX Fidelity", "Cost Control"],
+        sentiment: "POSITIVE",
+        reading_time: "1 min",
+        metadata: { model: "Local Offline Emulator", duration: "1.2s" }
+      };
+
+      return NextResponse.json({
+        success: true,
+        intelligence: mockIntelligence,
+        dbInsight: {
+          id: insightId || "demo-insight-id-placeholder",
+          title: title,
+          processing_status: 'completed',
+          audio_url: audioUrl || null,
+          summary: mockIntelligence.summary,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      });
+    }
+
     // Validate required fields
     if (!insightId || (!audioUrl && !textPayload)) {
       return NextResponse.json({ success: false, error: "Missing required fields in payload." }, { status: 400 });

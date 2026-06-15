@@ -150,48 +150,53 @@ export function useAudioRecorder() {
           // --- FOREGROUND PIPELINE ---
           (async () => {
             try {
+              const isDemo = document.cookie.includes('crunch_dev_bypass=true') || document.cookie.includes('crispy_dev_bypass=true');
               const { data: { user } } = await supabase.auth.getUser();
-              if (!user) throw new Error('No user session available');
+              if (!user && !isDemo) throw new Error('No user session available');
 
               const mimeType = blob.type;
-              const filePath = `${user.id}/${Date.now()}-${id}${extension}`;
+              const filePath = user ? `${user.id}/${Date.now()}-${id}${extension}` : `demo/${Date.now()}-${id}${extension}`;
 
-              // Get Signed Upload URL
-              const { data: signedData, error: signedError } = await supabase.storage
-                .from('meetings')
-                .createSignedUploadUrl(filePath);
-              
-              if (signedError) throw signedError;
+              if (user) {
+                // Get Signed Upload URL
+                const { data: signedData, error: signedError } = await supabase.storage
+                  .from('meetings')
+                  .createSignedUploadUrl(filePath);
+                
+                if (signedError) throw signedError;
 
-              // Upload using raw PUT request
-              if (blob.size < 1000) throw new Error("Blob is corrupted or empty before upload");
+                // Upload using raw PUT request
+                if (blob.size < 1000) throw new Error("Blob is corrupted or empty before upload");
 
-              const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_DATABASE_URL;
-              const finalUrl = new URL(signedData.signedUrl, supabaseUrl!).toString();
+                const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_DATABASE_URL;
+                const finalUrl = new URL(signedData.signedUrl, supabaseUrl!).toString();
 
-              const uploadResponse = await fetch(finalUrl, {
-                method: 'PUT',
-                body: blob,
-                headers: { 'Content-Type': mimeType }
-              });
+                const uploadResponse = await fetch(finalUrl, {
+                  method: 'PUT',
+                  body: blob,
+                  headers: { 'Content-Type': mimeType }
+                });
 
-              if (!uploadResponse.ok) throw new Error('Failed to upload file');
+                if (!uploadResponse.ok) throw new Error('Failed to upload file');
+              }
 
-              // Insert into Supabase DB
-              const { data: dbInsight, error: dbError } = await supabase
-                .from('insights')
-                .upsert({
-                  id: id,
-                  user_id: user.id,
-                  title: newInsight.title,
-                  processing_status: 'analyzing',
-                  audio_url: filePath,
-                  summary: 'Analyzing...',
-                }, { onConflict: 'id' })
-                .select()
-                .single();
+              if (user) {
+                // Insert into Supabase DB
+                const { data: dbInsight, error: dbError } = await supabase
+                  .from('insights')
+                  .upsert({
+                    id: id,
+                    user_id: user.id,
+                    title: newInsight.title,
+                    processing_status: 'analyzing',
+                    audio_url: filePath,
+                    summary: 'Analyzing...',
+                  }, { onConflict: 'id' })
+                  .select()
+                  .single();
 
-              if (dbError) throw dbError;
+                if (dbError) throw dbError;
+              }
 
               // Mark as analyzing locally
               const analyzingInsight = {
@@ -217,10 +222,11 @@ export function useAudioRecorder() {
 
               // Call API
               const apiBody: any = { 
-                insightId: dbInsight.id,
+                insightId: id,
                 mimeType: mimeType,
                 isDeepAnalysisEnabled: false,
-                audioUrl: filePath
+                audioUrl: filePath,
+                isDemoMode: isDemo
               };
 
               const response = await fetch('/api/analyze', {

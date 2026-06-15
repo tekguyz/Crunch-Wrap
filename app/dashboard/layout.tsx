@@ -14,7 +14,7 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const cookieStore = await cookies();
-  const isDevBypass = cookieStore.has('crispy_dev_bypass');
+  const isDevBypass = cookieStore.has('crispy_dev_bypass') || cookieStore.has('crunch_dev_bypass');
 
   const supabase = await createClient();
   const {
@@ -22,10 +22,10 @@ export default async function DashboardLayout({
   } = await supabase.auth.getUser();
 
   if (!user && !isDevBypass) {
-    redirect('/auth/login');
+    redirect('/auth');
   }
 
-  const userEmail = user?.email || 'dev@sandbox.local';
+  const userEmail = user?.email || cookieStore.get('crunch_dev_email')?.value || 'demo@tekguyz.com';
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">

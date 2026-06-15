@@ -11,6 +11,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'documentContext is required' }, { status: 400 });
     }
 
+    // Detect Sandbox Bypass / Demo Mode cookie or field
+    const cookieHeader = req.headers.get("cookie") || "";
+    const isDemoMode = cookieHeader.includes("crunch_dev_bypass=true") || 
+                       cookieHeader.includes("crispy_dev_bypass=true");
+
+    if (isDemoMode) {
+      console.log('API /api/chat called under Demo Mode. Running offline chat mock response.');
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      const lastUserMessage = messages && messages.length > 0 ? messages[messages.length - 1].text : "Hello";
+      
+      const responses = [
+        `Thanks for asking! In Demo Mode, I am running offline to show how the document Q&A assistant functions. Your question was: "${lastUserMessage}". Live synthesis results look exactly like this!`,
+        `That is an insightful question about this document! Since Demo Mode operates with zero API cost, I am simulating my answer. In the full production environment with an API Key, I analyze the entire context to formulate precise citations based directly on your query.`,
+        `Perfect test query! The Chat Drawer fully supports persistent message history, auto-scrolling, and responsive layouts. Is there anything else about the UI you would like to explore?`
+      ];
+      const randomIndex = Math.floor(Math.random() * responses.length);
+      const textResponse = responses[randomIndex];
+
+      return NextResponse.json({ text: textResponse });
+    }
+
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.API_KEY;
     if (!apiKey) {
       return NextResponse.json({ error: 'AI API Key is missing from environment variables.' }, { status: 401 });
